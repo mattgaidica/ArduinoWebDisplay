@@ -20,17 +20,20 @@ byte mac[] = {  MAC_BYTE_1,
 EthernetClient client;
 
 //indicators
-int leds[] = { 22, 26, 30, 34, 38, 42, 46, 50 };
+int leds[] = { 22, 26, 30, 34, 38, 42, 46, 48 };
 int ledCount = 8;
 int ledPos = 0; //position of led in loading pattern
 boolean ledForward = true; //direction of the loading pattern
 int status = 0; //used to trigger a reset
 
+//read delay
+long previousMillis = 0;
+long readInterval = 5000; 
+
 //ethernet
+int pageValue = 0;
 boolean connectFail = false;  //flag for a connection failure
 boolean startRead = false;    // if the program is reading data
-char inString[32];            // string for incoming serial data
-int stringPos = 0;            // string index counter
 
 void setup(){
   Ethernet.begin(mac);
@@ -48,7 +51,13 @@ void setup(){
 }
 
 void loop() {
-  int pageValue = connectAndRead(); //connect to the server and read the output
+  unsigned long currentMillis = millis();
+  //string pageString[32];
+  if(currentMillis - previousMillis > readInterval || previousMillis == 0) {
+    previousMillis = currentMillis;
+    pageValue = connectAndRead(); //connect to the server and read the output
+  }
+
   if(connectFail) {
     //handle error
     if(status != 1) {
@@ -63,7 +72,7 @@ void loop() {
       }
       status = 2;
       indicatorLoading();
-    } else if(pageValue < ledCount) {
+    } else if(pageValue <= ledCount) {
       if(status != 3) {
         indicatorsReset();
       }
@@ -74,12 +83,11 @@ void loop() {
         indicatorsReset();
       }
       status = 4;
-      indicatorFlashAll();
+      indicatorBlinkAll();
     }
   }
   //Serial.println(pageValue); //print out the findings.
   //delay(15000); //wait 5 seconds before connecting again
-  connectFail = false;
 }
 
 void indicatorsReset() {
@@ -104,9 +112,9 @@ void indicatorLoading() {
   }
 
   digitalWrite(leds[ledPos], HIGH);
-  delay(30);
+  delay(100);
   digitalWrite(leds[ledPos], LOW);
-  delay(30);
+  delay(100);
 
   if(ledForward) {
     ledPos++;
@@ -121,20 +129,21 @@ void indicatorLightQuantity(int ledTurnOnCount) {
   }
 }
 
-void indicatorFlashAll() {
+void indicatorBlinkAll() {
   for(int i = 0; i < ledCount; i++) {
     digitalWrite(leds[i], HIGH);
-    delay(300);
-    digitalWrite(leds[i], LOW);
-    delay(300);
   }
+  delay(300);
+  for(int i = 0; i < ledCount; i++) {
+    digitalWrite(leds[i], LOW);
+  }
+  delay(300);
 }
 
 int connectAndRead() {
-  return 0;
   //connect to the server
   Serial.println("connecting...");
-
+  connectFail = false;
   if (client.connect(server, 80)) {
     Serial.println("connected");
     client.println(REQUEST_STRING);
@@ -144,6 +153,7 @@ int connectAndRead() {
     //Connected - Read the page
     return readPage();
   } else {
+    Serial.println("connection failure!");
     connectFail = 1;
     return 0;
   }
@@ -152,28 +162,30 @@ int connectAndRead() {
 
 //capture & return integer between brackets
 int readPage() {
-  stringPos = 0;
-  memset( &inString, 0, 32 ); //clear inString memory
-
   while(true){
-
     if (client.available()) {
       char c = client.read();
 
       if (c == '{' ) {
         startRead = true;
       } else if(startRead) {
-        if(c != '}') {
-          inString[stringPos] = c;
-          stringPos ++;
-        } else {
-          //got everything
-          startRead = false;
-          client.stop();
-          client.flush();
-          Serial.println("disconnecting.");
-          return int(inString);
-        }
+        startRead = false;
+        client.stop();
+        client.flush();
+        Serial.println("disconnecting.");
+        Serial.println(c);
+
+        if(c == '0') return 0;
+        if(c == '1') return 1;
+        if(c == '2') return 2;
+        if(c == '3') return 3;
+        if(c == '4') return 4;
+        if(c == '5') return 5;
+        if(c == '6') return 6;
+        if(c == '7') return 7;
+        if(c == '8') return 8;
+        if(c == 'x') return ledCount + 1;
+        return 0;
       }
     }
   }
